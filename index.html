@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Data Storage and Display</title>
+    <title>Server-Side Submission Tracker (Firestore)</title>
     <!-- Load Tailwind CSS CDN for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Lucide Icons for visual feedback -->
@@ -38,11 +38,16 @@
     <div class="w-full max-w-3xl bg-white p-8 rounded-xl shadow-2xl border border-gray-100 mt-8">
         
         <h1 class="text-3xl font-extrabold text-gray-900 mb-2">
-            NM Mailid collection
+            NM Email collection
         </h1>
         <p class="text-gray-500 mb-6">
-            Enter details to save them persistently in your browser and view the history below.
+            Data is now stored on a **Firebase server** and updates in real-time.
         </p>
+
+        <!-- User Info -->
+        <div id="user-id-display" class="bg-indigo-50 p-3 rounded-lg text-sm text-indigo-700 mb-6 hidden">
+             <span class="font-semibold">User ID:</span> <span id="user-id-value"></span>
+        </div>
 
         <!-- Status Message Area -->
         <div id="status-message-container" class="mb-6">
@@ -60,7 +65,7 @@
                         type="text"
                         required
                         class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out disabled:bg-gray-50"
-                        placeholder="e.g., John Smith"
+                        placeholder="e.g., Jane Doe"
                     >
                 </div>
 
@@ -72,7 +77,7 @@
                         type="email"
                         required
                         class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out disabled:bg-gray-50"
-                        placeholder="john.smith@example.com"
+                        placeholder="jane.doe@example.com"
                     >
                     <p id="email-validation-message" class="mt-1 text-xs text-red-600 hidden">Please enter a valid email format.</p>
                 </div>
@@ -82,12 +87,14 @@
             <button
                 id="submit-button"
                 type="submit"
+                disabled
                 class="w-full md:w-auto flex justify-center items-center py-2 px-4 border border-transparent rounded-lg shadow-md text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 <span id="button-icon" class="mr-2">
-                    <i data-lucide="save" class="w-5 h-5"></i>
+                    <!-- Initial loading spinner until Firebase is ready -->
+                    <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                 </span>
-                <span id="button-text">Save Entry Locally</span>
+                <span id="button-text">Connecting to Server...</span>
             </button>
         </form>
         
@@ -95,14 +102,14 @@
         <div id="saved-data-section" class="mt-8">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-2xl font-bold text-gray-800 flex items-center">
-                    <i data-lucide="list-checks" class="w-6 h-6 text-indigo-500 mr-2"></i> Submission History
+                    <i data-lucide="list-checks" class="w-6 h-6 text-indigo-500 mr-2"></i> Submission History (Live)
                 </h2>
-                <!-- NEW EXPORT BUTTON (FIXED STRUCTURE) -->
+                <!-- EXPORT BUTTON - Enabled only after successful connection -->
                 <button
                     id="export-button"
-                    class="hidden text-sm flex items-center py-1.5 px-3 border border-transparent rounded-lg shadow-sm font-medium text-white bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-400 transition duration-150 ease-in-out"
+                    disabled 
+                    class="text-sm flex items-center py-1.5 px-3 border border-transparent rounded-lg shadow-sm font-medium text-white bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-400 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    <!-- FIX: Wrapped icon and text in spans for consistency with setLoading function -->
                     <span class="mr-1">
                         <i data-lucide="file-text" class="w-4 h-4"></i>
                     </span>
@@ -111,7 +118,7 @@
             </div>
             
             <div id="submission-table-container" class="overflow-x-auto rounded-lg shadow-md border border-gray-200">
-                <!-- The table will be injected here -->
+                <p class="p-4 text-center text-gray-500">Loading data from server...</p>
             </div>
             
             <p id="no-data-message" class="text-gray-500 mt-4 hidden">No submissions saved yet. Enter details above!</p>
@@ -119,11 +126,43 @@
 
     </div>
 
-    <script>
-        const STORAGE_KEY = 'localSubmissions';
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            onSnapshot, 
+            query, 
+            getDocs, // Added for the one-time export fetch
+            setLogLevel 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- GLOBAL FIREBASE VARIABLES (provided by the environment) ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // ---------------------------------------------------------------
+        
+        // --- FIREBASE SETUP ---
+        let app;
+        let db;
+        let auth;
+        let userId = null; 
+        
+        // Public collection path for shared data
+        const COLLECTION_PATH = `artifacts/${appId}/public/data/submissions`;
+
+        // UI element references
         let nameInput, emailInput, form, statusContainer, submitButton, buttonText, buttonIcon,
-            submissionTableContainer, noDataMessage, emailValidationMsg, exportButton;
+            submissionTableContainer, noDataMessage, emailValidationMsg, userIdDisplay, userIdValue,
+            exportButton; // Reference to the new export button
 
         const validateEmail = (email) => {
             return /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email);
@@ -144,54 +183,55 @@
             `;
             lucide.createIcons();
         };
-        
-        const setLoading = (isLoading, targetButton = submitButton, defaultText = 'Save Entry Locally', loadingText = 'Saving...') => {
-            targetButton.disabled = isLoading;
-            if (targetButton === submitButton) {
-                nameInput.disabled = isLoading;
-                emailInput.disabled = isLoading;
-            }
+
+        /**
+         * Generic function to set loading state for any button.
+         */
+        const setButtonLoading = (button, isLoading, defaultText, loadingText, iconName) => {
+            button.disabled = isLoading;
             
-            // These query selectors rely on the button content being wrapped in <span> tags
-            const btnIconElement = targetButton.querySelector('span:first-child');
-            const btnTextElement = targetButton.querySelector('span:last-child');
+            // Querying for spans is safe due to fixed HTML structure
+            const btnIconElement = button.querySelector('span:first-child');
+            const btnTextElement = button.querySelector('span:last-child');
             
             if (isLoading) {
                 btnTextElement.textContent = loadingText;
-                // Using an SVG spinner for a better loading experience
                 btnIconElement.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
             } else {
                 btnTextElement.textContent = defaultText;
-                if (targetButton === submitButton) {
-                    btnIconElement.innerHTML = '<i data-lucide="save" class="w-5 h-5 lucide"></i>';
-                } else if (targetButton === exportButton) {
-                    btnIconElement.innerHTML = '<i data-lucide="file-text" class="w-4 h-4"></i>';
-                }
+                btnIconElement.innerHTML = `<i data-lucide="${iconName}" class="w-5 h-5 lucide"></i>`;
             }
             lucide.createIcons();
+        };
+        
+        /**
+         * Sets loading state specifically for the form/submit button.
+         */
+        const setFormLoading = (isLoading, defaultText = 'Save Entry to Server', loadingText = 'Sending...') => {
+            // Check if auth is ready before attempting to enable
+            const isAuthReady = !!userId;
+
+            // Only update fields and submit button state
+            submitButton.disabled = isLoading || !isAuthReady;
+            nameInput.disabled = isLoading || !isAuthReady;
+            emailInput.disabled = isLoading || !isAuthReady;
+
+            setButtonLoading(submitButton, isLoading, defaultText, loadingText, 'save');
         }
 
-        const loadSubmissions = () => {
-            const data = localStorage.getItem(STORAGE_KEY);
-            return data ? JSON.parse(data) : [];
-        };
-
-        const saveSubmissions = (submissions) => {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(submissions));
-        };
-
-        const loadAndRenderTable = () => {
-            const submissions = loadSubmissions();
+        /**
+         * Renders the HTML table based on the real-time submissions array.
+         * @param {Array} submissions - The array of submission objects from Firestore.
+         */
+        const renderTable = (submissions) => {
             submissionTableContainer.innerHTML = '';
+            noDataMessage.classList.add('hidden');
 
             if (submissions.length === 0) {
                 noDataMessage.classList.remove('hidden');
-                exportButton.classList.add('hidden');
+                submissionTableContainer.innerHTML = `<p class="p-4 text-center text-gray-500">No submissions found on the server.</p>`;
                 return;
             }
-
-            noDataMessage.classList.add('hidden');
-            exportButton.classList.remove('hidden'); // Show export button if data exists
 
             let tableHTML = `
                 <table class="min-w-full divide-y divide-gray-200 bg-white">
@@ -205,8 +245,10 @@
                     <tbody class="divide-y divide-gray-200">
             `;
             
-            // Render rows in reverse order (newest first)
-            submissions.slice().reverse().forEach(entry => {
+            // Sort entries by timestamp descending (newest first)
+            submissions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            submissions.forEach(entry => {
                 const date = new Date(entry.timestamp);
                 const timeString = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                 const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -228,87 +270,8 @@
             submissionTableContainer.innerHTML = tableHTML;
         };
 
-        /**
-         * Converts the data array to a CSV string.
-         * @param {Array} data - The array of submission objects.
-         * @returns {string} The CSV content.
-         */
-        const arrayToCsv = (data) => {
-            // Helper function to handle quotes and commas in strings
-            const escapeCsv = (str) => `"${String(str).replace(/"/g, '""')}"`;
-
-            // CSV Headers
-            const headers = ['Timestamp', 'Name', 'Email'];
-            let csv = headers.map(escapeCsv).join(',') + '\n';
-
-            // Data rows
-            data.forEach(entry => {
-                const row = [
-                    entry.timestamp,
-                    entry.name,
-                    entry.email
-                ];
-                csv += row.map(escapeCsv).join(',') + '\n';
-            });
-
-            return csv;
-        };
-
-        /**
-         * Triggers the download of the CSV file.
-         */
-        const handleExport = () => {
-            // Error was here: setLoading call failed because export button structure was wrong
-            setLoading(true, exportButton, 'Export to CSV', 'Generating...');
-            updateStatus('', '');
-
-            try {
-                const submissions = loadSubmissions();
-                if (submissions.length === 0) {
-                    updateStatus('error', 'No data to export.');
-                    return;
-                }
-
-                const csvContent = arrayToCsv(submissions);
-
-                // 1. Create a Blob object from the CSV string
-                // The 'text/csv' type is compatible with Excel/Sheets
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                
-                // 2. Create a temporary link element for downloading
-                const link = document.createElement("a");
-                
-                if (link.download !== undefined) { 
-                    const url = URL.createObjectURL(blob);
-                    link.setAttribute("href", url);
-                    
-                    // Set the filename
-                    const date = new Date().toISOString().slice(0, 10);
-                    link.setAttribute("download", `local_submissions_${date}.csv`);
-                    
-                    // Trigger the download
-                    link.style.visibility = 'hidden';
-                    document.body.appendChild(link);
-                    link.click();
-                    
-                    // Clean up
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url); 
-
-                    updateStatus('success', `Export successful! Downloaded ${submissions.length} entries.`);
-                } else {
-                    updateStatus('error', 'CSV download is not supported by your browser.');
-                }
-            } catch (error) {
-                console.error('Export error:', error);
-                updateStatus('error', 'An error occurred during export.');
-            } finally {
-                setLoading(false, exportButton, 'Export to CSV');
-            }
-        };
-
-        // Main submission handler
-        const handleSubmit = (e) => {
+        // Main submission handler (sends data to Firestore)
+        const handleSubmit = async (e) => {
             e.preventDefault();
             updateStatus('', '');
             emailValidationMsg.classList.add('hidden');
@@ -327,32 +290,184 @@
                 return;
             }
 
-            setLoading(true);
+            setFormLoading(true);
 
             try {
+                // Prepare the data payload for Firestore
                 const newEntry = {
                     name: name,
                     email: email,
+                    userId: userId, 
                     timestamp: new Date().toISOString()
                 };
 
-                const submissions = loadSubmissions();
-                submissions.push(newEntry);
-                saveSubmissions(submissions);
+                // Add document to the public submissions collection
+                await addDoc(collection(db, COLLECTION_PATH), newEntry);
 
-                loadAndRenderTable();
-                updateStatus('success', 'Entry saved successfully to local history!');
+                updateStatus('success', 'Entry saved successfully to the server!');
                 
+                // Clear inputs
                 nameInput.value = ''; 
                 emailInput.value = '';
 
             } catch (error) {
-                console.error('Local storage operation error:', error);
-                updateStatus('error', 'Error saving data locally. Check browser console.');
+                console.error('Firestore submission error:', error);
+                updateStatus('error', 'Error saving data to the server.');
             } finally {
-                setLoading(false);
+                setFormLoading(false, 'Save Entry to Server', 'Sending...');
             }
         };
+
+        /**
+         * Converts the data array to a CSV string.
+         * @param {Array} data - The array of submission objects from Firestore.
+         * @returns {string} The CSV content.
+         */
+        const arrayToCsv = (data) => {
+            // Helper function to handle quotes and commas in strings
+            const escapeCsv = (str) => `"${String(str).replace(/"/g, '""')}"`;
+
+            // CSV Headers
+            const headers = ['Timestamp', 'Name', 'Email', 'UserID'];
+            let csv = headers.map(escapeCsv).join(',') + '\n';
+
+            // Data rows
+            data.forEach(entry => {
+                const row = [
+                    entry.timestamp,
+                    entry.name,
+                    entry.email,
+                    entry.userId 
+                ];
+                csv += row.map(escapeCsv).join(',') + '\n';
+            });
+
+            return csv;
+        };
+
+        /**
+         * Triggers the download of the CSV file by fetching all data from Firestore.
+         */
+        const handleExport = async () => {
+            if (!db || !userId) {
+                updateStatus('error', 'Server not connected. Cannot export.');
+                return;
+            }
+            
+            setButtonLoading(exportButton, true, 'Export to CSV', 'Fetching data...', 'file-text');
+            updateStatus('', ''); // Clear status
+
+            try {
+                const q = query(collection(db, COLLECTION_PATH));
+                // Use getDocs for a one-time read for export
+                const querySnapshot = await getDocs(q); 
+                
+                const submissions = [];
+                querySnapshot.forEach((doc) => {
+                    // Pull all data from the server
+                    submissions.push(doc.data());
+                });
+
+                if (submissions.length === 0) {
+                    updateStatus('error', 'No data on the server to export.');
+                    return;
+                }
+
+                const csvContent = arrayToCsv(submissions);
+
+                // --- Download Logic ---
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                
+                if (link.download !== undefined) { 
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute("href", url);
+                    const date = new Date().toISOString().slice(0, 10);
+                    link.setAttribute("download", `server_submissions_${date}.csv`);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url); 
+
+                    updateStatus('success', `Export successful! Downloaded ${submissions.length} entries from the server.`);
+                } else {
+                    updateStatus('error', 'CSV download is not supported by your browser.');
+                }
+                // --- End Download Logic ---
+
+            } catch (error) {
+                console.error('Firestore export error:', error);
+                updateStatus('error', 'An error occurred while fetching data for export.');
+            } finally {
+                setButtonLoading(exportButton, false, 'Export to CSV', 'Export to CSV', 'file-text');
+            }
+        };
+
+        // Function to set up the real-time listener for the table data
+        const setupRealtimeListener = () => {
+            if (!db || !userId) {
+                console.error("Firestore or User ID is not initialized.");
+                return;
+            }
+
+            const submissionsQuery = query(collection(db, COLLECTION_PATH));
+            
+            // Set up the real-time listener
+            onSnapshot(submissionsQuery, (snapshot) => {
+                const submissions = [];
+                snapshot.forEach((doc) => {
+                    submissions.push({ ...doc.data(), id: doc.id });
+                });
+
+                renderTable(submissions);
+                console.log(`[Firestore] Updated table with ${submissions.length} entries.`);
+
+            }, (error) => {
+                console.error("[Firestore] Real-time listening failed:", error);
+                submissionTableContainer.innerHTML = `<p class="p-4 text-center text-red-600">Failed to load live data.</p>`;
+            });
+        };
+
+        // Initialize Firebase and Authentication
+        const initFirebase = async () => {
+             try {
+                // Initialize core Firebase services
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                setLogLevel('Debug');
+
+                // 1. Authenticate user
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // 2. Wait for auth state to stabilize
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdValue.textContent = userId;
+                        userIdDisplay.classList.remove('hidden');
+                        
+                        // Authentication complete, enable form and start listening
+                        setFormLoading(false, 'Save Entry to Server'); 
+                        exportButton.disabled = false; // Enable export button
+                        setupRealtimeListener();
+                    } else {
+                        userId = null;
+                        updateStatus('error', 'Failed to authenticate with server. Try reloading.');
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                updateStatus('error', 'App failed to connect to the server.');
+            }
+        };
+
 
         // Initialize the application and attach event listeners
         document.addEventListener('DOMContentLoaded', () => {
@@ -362,19 +477,21 @@
             form = document.getElementById('data-form');
             statusContainer = document.getElementById('status-message-container');
             submitButton = document.getElementById('submit-button');
-            buttonText = submitButton.querySelector('#button-text');
-            buttonIcon = submitButton.querySelector('#button-icon');
+            buttonText = submitButton.querySelector('span:last-child');
+            buttonIcon = submitButton.querySelector('span:first-child');
             submissionTableContainer = document.getElementById('submission-table-container');
             noDataMessage = document.getElementById('no-data-message');
             emailValidationMsg = document.getElementById('email-validation-message');
-            exportButton = document.getElementById('export-button');
+            userIdDisplay = document.getElementById('user-id-display');
+            userIdValue = document.getElementById('user-id-value');
+            exportButton = document.getElementById('export-button'); // Get reference
 
             // Attach event listeners
             form.addEventListener('submit', handleSubmit);
-            exportButton.addEventListener('click', handleExport);
+            exportButton.addEventListener('click', handleExport); // Attach export listener
             
-            // Load and display existing data when the page loads
-            loadAndRenderTable();
+            // Start the server connection process
+            initFirebase();
             
             // Initial render of lucide icons
             lucide.createIcons();
