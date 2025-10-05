@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML/JS Data Collector</title>
+    <!-- Load Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom font import for better aesthetics */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        /* Style for Lucide icons to look sharp */
+        .lucide {
+            display: inline-block;
+            stroke-width: 2.5;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <!-- Main Card Container -->
+    <div class="w-full max-w-lg bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
+        
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-2">
+            Contact Information Collector
+        </h1>
+        <p class="text-gray-500 mb-6">
+            Enter your details below to submit data directly to your Google Sheet.
+        </p>
+
+        <!-- Status Message Area -->
+        <div id="status-message-container" class="mb-4">
+            <!-- Messages will be rendered here -->
+        </div>
+
+        <!-- Submission Form -->
+        <form id="data-form" class="space-y-6">
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name
+                </label>
+                <input
+                    id="name"
+                    type="text"
+                    required
+                    class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out disabled:bg-gray-50"
+                    placeholder="e.g., John Smith"
+                >
+            </div>
+
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
+                    Email Address
+                </label>
+                <input
+                    id="email"
+                    type="email"
+                    required
+                    class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out disabled:bg-gray-50"
+                    placeholder="john.smith@example.com"
+                >
+                <p id="email-validation-message" class="mt-1 text-xs text-red-600 hidden">Please enter a valid email format.</p>
+            </div>
+
+            <!-- Submit Button -->
+            <button
+                id="submit-button"
+                type="submit"
+                class="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-lg shadow-md text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <span id="button-icon" class="mr-2">
+                    <i data-lucide="send" class="w-5 h-5"></i>
+                </span>
+                <span id="button-text">Submit to Google Sheet</span>
+            </button>
+        </form>
+        
+        <!-- Last Submitted Data Card -->
+        <div id="submitted-data-container" class="mt-8 pt-6 border-t border-gray-200 hidden">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i data-lucide="check-circle" class="w-6 h-6 text-green-500 mr-2"></i> Last Submitted Data
+            </h2>
+            <div class="space-y-3 bg-green-50 p-4 rounded-lg border border-green-200">
+                <div class="flex items-center text-gray-700">
+                    <i data-lucide="user" class="w-5 h-5 mr-3 text-green-600"></i>
+                    <span class="font-semibold mr-2">Name:</span>
+                    <span id="display-name"></span>
+                </div>
+                <div class="flex items-center text-gray-700">
+                    <i data-lucide="mail" class="w-5 h-5 mr-3 text-green-600"></i>
+                    <span class="font-semibold mr-2">Email:</span>
+                    <span id="display-email"></span>
+                </div>
+            </div>
+            <p class="text-sm text-gray-500 mt-3">This data was successfully sent to your Google Sheet.</p>
+        </div>
+
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // These values were extracted from your shared Google Form link.
+        const FORM_ACTION_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScgAHZCl3MIFGDZ0cwipNxvvf0vt3xdWVCW0Bl-r4oHYUxkUw/formResponse';
+        const FIELD_NAME_MAPPINGS = {
+            name: 'entry.1313454797', 
+            email: 'entry.1113569795',
+        };
+        // ---------------------
+
+        let nameInput;
+        let emailInput;
+        let form;
+        let statusContainer;
+        let submitButton;
+        let buttonText;
+        let buttonIcon;
+        let submittedDataContainer;
+        let displayName;
+        let displayEmail;
+        let emailValidationMsg;
+
+        // Simple email validation regex
+        const validateEmail = (email) => {
+            return /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email);
+        };
+
+        // Renders the status message (Success/Error)
+        const updateStatus = (type, message) => {
+            statusContainer.innerHTML = ''; // Clear previous messages
+            if (!message) return;
+
+            let iconClass = '';
+            let colorClass = '';
+            let iconName = '';
+
+            if (type === 'success') {
+                iconName = 'check-circle';
+                colorClass = 'bg-green-100 text-green-700 border-green-400';
+            } else if (type === 'error') {
+                iconName = 'x-circle';
+                colorClass = 'bg-red-100 text-red-700 border-red-400';
+            }
+
+            statusContainer.innerHTML = `
+                <div class="p-3 rounded-lg border flex items-center ${colorClass} transition-opacity duration-300">
+                    <i data-lucide="${iconName}" class="w-5 h-5 mr-2 lucide"></i>
+                    <p class="text-sm font-medium">${message}</p>
+                </div>
+            `;
+            // Re-render lucide icons after injecting HTML
+            lucide.createIcons();
+        };
+        
+        // Renders the last successfully submitted data card
+        const renderSubmittedData = (name, email) => {
+            if (name && email) {
+                displayName.textContent = name;
+                displayEmail.textContent = email;
+                submittedDataContainer.classList.remove('hidden');
+            } else {
+                submittedDataContainer.classList.add('hidden');
+            }
+        };
+
+        // Updates the button to show loading state
+        const setLoading = (isLoading) => {
+            submitButton.disabled = isLoading;
+            nameInput.disabled = isLoading;
+            emailInput.disabled = isLoading;
+            
+            if (isLoading) {
+                buttonText.textContent = 'Submitting...';
+                buttonIcon.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin lucide"></i>';
+            } else {
+                buttonText.textContent = 'Submit to Google Sheet';
+                buttonIcon.innerHTML = '<i data-lucide="send" class="w-5 h-5 lucide"></i>';
+            }
+            lucide.createIcons(); // Re-render lucide icons
+        }
+
+        // Main submission handler
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            updateStatus('', ''); // Clear status
+            emailValidationMsg.classList.add('hidden');
+
+            const name = nameInput.value.trim();
+            const email = emailInput.value.trim();
+
+            if (!name || !email) {
+                updateStatus('error', 'Name and Email fields are required.');
+                return;
+            }
+
+            if (!validateEmail(email)) {
+                updateStatus('error', 'Please enter a valid email address.');
+                emailValidationMsg.classList.remove('hidden');
+                return;
+            }
+
+            setLoading(true);
+
+            try {
+                const formData = new FormData();
+                formData.append(FIELD_NAME_MAPPINGS.name, name);
+                formData.append(FIELD_NAME_MAPPINGS.email, email);
+
+                // Use fetch with 'no-cors' mode to submit to the Google Form endpoint.
+                // The response status will always be 'opaque' but the submission succeeds.
+                await fetch(FORM_ACTION_URL, {
+                    method: 'POST',
+                    body: formData,
+                    mode: 'no-cors', 
+                });
+
+                // Update UI on successful submission
+                updateStatus('success', 'Success! Your data has been stored in the Google Sheet.');
+                renderSubmittedData(name, email);
+                
+                // Clear inputs
+                nameInput.value = ''; 
+                emailInput.value = '';
+
+            } catch (error) {
+                console.error('Submission error:', error);
+                // Since 'no-cors' makes error detection difficult, we use a general failure message.
+                updateStatus('error', 'Submission failed. Check the console for network errors.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        // Initialize the application and attach event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Get element references
+            nameInput = document.getElementById('name');
+            emailInput = document.getElementById('email');
+            form = document.getElementById('data-form');
+            statusContainer = document.getElementById('status-message-container');
+            submitButton = document.getElementById('submit-button');
+            buttonText = document.getElementById('button-text');
+            buttonIcon = document.getElementById('button-icon');
+            submittedDataContainer = document.getElementById('submitted-data-container');
+            displayName = document.getElementById('display-name');
+            displayEmail = document.getElementById('display-email');
+            emailValidationMsg = document.getElementById('email-validation-message');
+
+            // Attach event listener
+            form.addEventListener('submit', handleSubmit);
+            
+            // Initial render of lucide icons
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
