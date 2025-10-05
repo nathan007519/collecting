@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google Sheet Data Collector</title>
+    <title>Local Data Storage and Display</title>
     <!-- Load Tailwind CSS CDN for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Lucide Icons for visual feedback -->
@@ -20,131 +20,121 @@
             display: inline-block;
             stroke-width: 2.5;
         }
+        /* Style for table headers to ensure minimum width on mobile */
+        th {
+            padding: 0.75rem 0.5rem;
+            text-align: left;
+            font-size: 0.75rem; /* text-xs */
+        }
+        td {
+            padding: 0.75rem 0.5rem;
+            font-size: 0.875rem; /* text-sm */
+        }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
+<body class="min-h-screen flex items-start justify-center p-4">
 
     <!-- Main Card Container -->
-    <div class="w-full max-w-lg bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
+    <div class="w-full max-w-3xl bg-white p-8 rounded-xl shadow-2xl border border-gray-100 mt-8">
         
         <h1 class="text-3xl font-extrabold text-gray-900 mb-2">
-            Secure Data Collector
+            NM Mailid collection
         </h1>
         <p class="text-gray-500 mb-6">
-            Enter your details below to submit data directly to your **Google Sheet**.
+            Enter details to save them persistently in your browser and view the history below.
         </p>
 
         <!-- Status Message Area -->
-        <div id="status-message-container" class="mb-4">
+        <div id="status-message-container" class="mb-6">
             <!-- Messages will be rendered here -->
         </div>
 
         <!-- Submission Form -->
-        <form id="data-form" class="space-y-6">
-            <div>
-                <label for="name" class="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name
-                </label>
-                <input
-                    id="name"
-                    type="text"
-                    required
-                    class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out disabled:bg-gray-50"
-                    placeholder="e.g., John Smith"
-                >
-            </div>
+        <form id="data-form" class="space-y-6 pb-6 border-b border-gray-200">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Name Input -->
+                <div>
+                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input
+                        id="name"
+                        type="text"
+                        required
+                        class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out disabled:bg-gray-50"
+                        placeholder="e.g., John Smith"
+                    >
+                </div>
 
-            <div>
-                <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address
-                </label>
-                <input
-                    id="email"
-                    type="email"
-                    required
-                    class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out disabled:bg-gray-50"
-                    placeholder="john.smith@example.com"
-                >
-                <p id="email-validation-message" class="mt-1 text-xs text-red-600 hidden">Please enter a valid email format.</p>
+                <!-- Email Input -->
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    <input
+                        id="email"
+                        type="email"
+                        required
+                        class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out disabled:bg-gray-50"
+                        placeholder="john.smith@example.com"
+                    >
+                    <p id="email-validation-message" class="mt-1 text-xs text-red-600 hidden">Please enter a valid email format.</p>
+                </div>
             </div>
 
             <!-- Submit Button -->
             <button
                 id="submit-button"
                 type="submit"
-                class="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-lg shadow-md text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
+                class="w-full md:w-auto flex justify-center items-center py-2 px-4 border border-transparent rounded-lg shadow-md text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 <span id="button-icon" class="mr-2">
-                    <i data-lucide="send" class="w-5 h-5"></i>
+                    <i data-lucide="save" class="w-5 h-5"></i>
                 </span>
-                <span id="button-text">Submit to Google Sheet</span>
+                <span id="button-text">Save Entry Locally</span>
             </button>
         </form>
         
-        <!-- Last Submitted Data Card -->
-        <div id="submitted-data-container" class="mt-8 pt-6 border-t border-gray-200 hidden">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
-                <i data-lucide="check-circle" class="w-6 h-6 text-green-500 mr-2"></i> Last Submitted Data
-            </h2>
-            <div class="space-y-3 bg-green-50 p-4 rounded-lg border border-green-200">
-                <div class="flex items-center text-gray-700">
-                    <i data-lucide="user" class="w-5 h-5 mr-3 text-green-600"></i>
-                    <span class="font-semibold mr-2">Name:</span>
-                    <span id="display-name"></span>
-                </div>
-                <div class="flex items-center text-gray-700">
-                    <i data-lucide="mail" class="w-5 h-5 mr-3 text-green-600"></i>
-                    <span class="font-semibold mr-2">Email:</span>
-                    <span id="display-email"></span>
-                </div>
+        <!-- Saved Data Table Container -->
+        <div id="saved-data-section" class="mt-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+                    <i data-lucide="list-checks" class="w-6 h-6 text-indigo-500 mr-2"></i> Submission History
+                </h2>
+                <!-- NEW EXPORT BUTTON (FIXED STRUCTURE) -->
+                <button
+                    id="export-button"
+                    class="hidden text-sm flex items-center py-1.5 px-3 border border-transparent rounded-lg shadow-sm font-medium text-white bg-green-500 hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-400 transition duration-150 ease-in-out"
+                >
+                    <!-- FIX: Wrapped icon and text in spans for consistency with setLoading function -->
+                    <span class="mr-1">
+                        <i data-lucide="file-text" class="w-4 h-4"></i>
+                    </span>
+                    <span>Export to CSV</span>
+                </button>
             </div>
-            <p class="text-sm text-gray-500 mt-3">This data was successfully sent to your Google Sheet.</p>
+            
+            <div id="submission-table-container" class="overflow-x-auto rounded-lg shadow-md border border-gray-200">
+                <!-- The table will be injected here -->
+            </div>
+            
+            <p id="no-data-message" class="text-gray-500 mt-4 hidden">No submissions saved yet. Enter details above!</p>
         </div>
 
     </div>
 
     <script>
-        // --- FINAL CONFIGURATION (Guaranteed to be correct based on your form data) ---
-        const FORM_ACTION_URL = 'https://docs.google.com/forms/d/e/1FAIpQLScgAHZCl3MIFGDZ0cwipNxvvf0vt3xdWVCW0Bl-r4oHYUxkUw/formResponse';
-        const FIELD_NAME_MAPPINGS = {
-            name: 'entry.1313454797', 
-            email: 'entry.1113569795',
-        };
-        // --------------------------------------------------------------------------
+        const STORAGE_KEY = 'localSubmissions';
 
-        let nameInput;
-        let emailInput;
-        let form;
-        let statusContainer;
-        let submitButton;
-        let buttonText;
-        let buttonIcon;
-        let submittedDataContainer;
-        let displayName;
-        let displayEmail;
-        let emailValidationMsg;
+        let nameInput, emailInput, form, statusContainer, submitButton, buttonText, buttonIcon,
+            submissionTableContainer, noDataMessage, emailValidationMsg, exportButton;
 
-        // Simple email validation regex
         const validateEmail = (email) => {
             return /^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email);
         };
 
-        // Renders the status message (Success/Error)
         const updateStatus = (type, message) => {
-            statusContainer.innerHTML = ''; // Clear previous messages
+            statusContainer.innerHTML = '';
             if (!message) return;
 
-            let iconClass = '';
-            let colorClass = '';
-            let iconName = '';
-
-            if (type === 'success') {
-                iconName = 'check-circle';
-                colorClass = 'bg-green-100 text-green-700 border-green-400';
-            } else if (type === 'error') {
-                iconName = 'x-circle';
-                colorClass = 'bg-red-100 text-red-700 border-red-400';
-            }
+            let iconName = type === 'success' ? 'check-circle' : 'x-circle';
+            let colorClass = type === 'success' ? 'bg-green-100 text-green-700 border-green-400' : 'bg-red-100 text-red-700 border-red-400';
 
             statusContainer.innerHTML = `
                 <div class="p-3 rounded-lg border flex items-center ${colorClass} transition-opacity duration-300">
@@ -152,42 +142,175 @@
                     <p class="text-sm font-medium">${message}</p>
                 </div>
             `;
-            // Re-render lucide icons after injecting HTML
             lucide.createIcons();
         };
         
-        // Renders the last successfully submitted data card
-        const renderSubmittedData = (name, email) => {
-            if (name && email) {
-                displayName.textContent = name;
-                displayEmail.textContent = email;
-                submittedDataContainer.classList.remove('hidden');
+        const setLoading = (isLoading, targetButton = submitButton, defaultText = 'Save Entry Locally', loadingText = 'Saving...') => {
+            targetButton.disabled = isLoading;
+            if (targetButton === submitButton) {
+                nameInput.disabled = isLoading;
+                emailInput.disabled = isLoading;
+            }
+            
+            // These query selectors rely on the button content being wrapped in <span> tags
+            const btnIconElement = targetButton.querySelector('span:first-child');
+            const btnTextElement = targetButton.querySelector('span:last-child');
+            
+            if (isLoading) {
+                btnTextElement.textContent = loadingText;
+                // Using an SVG spinner for a better loading experience
+                btnIconElement.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
             } else {
-                submittedDataContainer.classList.add('hidden');
+                btnTextElement.textContent = defaultText;
+                if (targetButton === submitButton) {
+                    btnIconElement.innerHTML = '<i data-lucide="save" class="w-5 h-5 lucide"></i>';
+                } else if (targetButton === exportButton) {
+                    btnIconElement.innerHTML = '<i data-lucide="file-text" class="w-4 h-4"></i>';
+                }
+            }
+            lucide.createIcons();
+        }
+
+        const loadSubmissions = () => {
+            const data = localStorage.getItem(STORAGE_KEY);
+            return data ? JSON.parse(data) : [];
+        };
+
+        const saveSubmissions = (submissions) => {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(submissions));
+        };
+
+        const loadAndRenderTable = () => {
+            const submissions = loadSubmissions();
+            submissionTableContainer.innerHTML = '';
+
+            if (submissions.length === 0) {
+                noDataMessage.classList.remove('hidden');
+                exportButton.classList.add('hidden');
+                return;
+            }
+
+            noDataMessage.classList.add('hidden');
+            exportButton.classList.remove('hidden'); // Show export button if data exists
+
+            let tableHTML = `
+                <table class="min-w-full divide-y divide-gray-200 bg-white">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th scope="col" class="text-gray-500 uppercase tracking-wider font-bold">Time</th>
+                            <th scope="col" class="text-gray-500 uppercase tracking-wider font-bold">Name</th>
+                            <th scope="col" class="text-gray-500 uppercase tracking-wider font-bold">Email</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+            `;
+            
+            // Render rows in reverse order (newest first)
+            submissions.slice().reverse().forEach(entry => {
+                const date = new Date(entry.timestamp);
+                const timeString = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                tableHTML += `
+                    <tr class="hover:bg-gray-50 transition duration-100">
+                        <td class="whitespace-nowrap text-gray-500">${dateString} ${timeString}</td>
+                        <td class="whitespace-nowrap font-medium text-gray-900">${entry.name}</td>
+                        <td class="text-gray-600">${entry.email}</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            submissionTableContainer.innerHTML = tableHTML;
+        };
+
+        /**
+         * Converts the data array to a CSV string.
+         * @param {Array} data - The array of submission objects.
+         * @returns {string} The CSV content.
+         */
+        const arrayToCsv = (data) => {
+            // Helper function to handle quotes and commas in strings
+            const escapeCsv = (str) => `"${String(str).replace(/"/g, '""')}"`;
+
+            // CSV Headers
+            const headers = ['Timestamp', 'Name', 'Email'];
+            let csv = headers.map(escapeCsv).join(',') + '\n';
+
+            // Data rows
+            data.forEach(entry => {
+                const row = [
+                    entry.timestamp,
+                    entry.name,
+                    entry.email
+                ];
+                csv += row.map(escapeCsv).join(',') + '\n';
+            });
+
+            return csv;
+        };
+
+        /**
+         * Triggers the download of the CSV file.
+         */
+        const handleExport = () => {
+            // Error was here: setLoading call failed because export button structure was wrong
+            setLoading(true, exportButton, 'Export to CSV', 'Generating...');
+            updateStatus('', '');
+
+            try {
+                const submissions = loadSubmissions();
+                if (submissions.length === 0) {
+                    updateStatus('error', 'No data to export.');
+                    return;
+                }
+
+                const csvContent = arrayToCsv(submissions);
+
+                // 1. Create a Blob object from the CSV string
+                // The 'text/csv' type is compatible with Excel/Sheets
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                
+                // 2. Create a temporary link element for downloading
+                const link = document.createElement("a");
+                
+                if (link.download !== undefined) { 
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute("href", url);
+                    
+                    // Set the filename
+                    const date = new Date().toISOString().slice(0, 10);
+                    link.setAttribute("download", `local_submissions_${date}.csv`);
+                    
+                    // Trigger the download
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    
+                    // Clean up
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url); 
+
+                    updateStatus('success', `Export successful! Downloaded ${submissions.length} entries.`);
+                } else {
+                    updateStatus('error', 'CSV download is not supported by your browser.');
+                }
+            } catch (error) {
+                console.error('Export error:', error);
+                updateStatus('error', 'An error occurred during export.');
+            } finally {
+                setLoading(false, exportButton, 'Export to CSV');
             }
         };
 
-        // Updates the button to show loading state
-        const setLoading = (isLoading) => {
-            submitButton.disabled = isLoading;
-            nameInput.disabled = isLoading;
-            emailInput.disabled = isLoading;
-            
-            if (isLoading) {
-                buttonText.textContent = 'Submitting...';
-                // Using an SVG spinner for a better loading experience
-                buttonIcon.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
-            } else {
-                buttonText.textContent = 'Submit to Google Sheet';
-                buttonIcon.innerHTML = '<i data-lucide="send" class="w-5 h-5 lucide"></i>';
-            }
-            lucide.createIcons(); // Re-render lucide icons
-        }
-
         // Main submission handler
-        const handleSubmit = async (e) => {
+        const handleSubmit = (e) => {
             e.preventDefault();
-            updateStatus('', ''); // Clear status
+            updateStatus('', '');
             emailValidationMsg.classList.add('hidden');
 
             const name = nameInput.value.trim();
@@ -207,30 +330,25 @@
             setLoading(true);
 
             try {
-                const formData = new FormData();
-                formData.append(FIELD_NAME_MAPPINGS.name, name);
-                formData.append(FIELD_NAME_MAPPINGS.email, email);
+                const newEntry = {
+                    name: name,
+                    email: email,
+                    timestamp: new Date().toISOString()
+                };
 
-                // Send the data. We use 'no-cors' mode as we cannot read the response 
-                // from the Google Forms domain, but the submission still occurs.
-                await fetch(FORM_ACTION_URL, {
-                    method: 'POST',
-                    body: formData,
-                    mode: 'no-cors', 
-                });
+                const submissions = loadSubmissions();
+                submissions.push(newEntry);
+                saveSubmissions(submissions);
 
-                // Since we can't confirm the response status (due to no-cors), 
-                // we treat the successful network request as a successful submission.
-                updateStatus('success', 'Success! Your data has been stored in the Google Sheet.');
-                renderSubmittedData(name, email);
+                loadAndRenderTable();
+                updateStatus('success', 'Entry saved successfully to local history!');
                 
-                // Clear inputs
                 nameInput.value = ''; 
                 emailInput.value = '';
 
             } catch (error) {
-                console.error('Submission network error:', error);
-                updateStatus('error', 'Submission failed. Check the console for network errors.');
+                console.error('Local storage operation error:', error);
+                updateStatus('error', 'Error saving data locally. Check browser console.');
             } finally {
                 setLoading(false);
             }
@@ -244,15 +362,19 @@
             form = document.getElementById('data-form');
             statusContainer = document.getElementById('status-message-container');
             submitButton = document.getElementById('submit-button');
-            buttonText = document.getElementById('button-text');
-            buttonIcon = document.getElementById('button-icon');
-            submittedDataContainer = document.getElementById('submitted-data-container');
-            displayName = document.getElementById('display-name');
-            displayEmail = document.getElementById('display-email');
+            buttonText = submitButton.querySelector('#button-text');
+            buttonIcon = submitButton.querySelector('#button-icon');
+            submissionTableContainer = document.getElementById('submission-table-container');
+            noDataMessage = document.getElementById('no-data-message');
             emailValidationMsg = document.getElementById('email-validation-message');
+            exportButton = document.getElementById('export-button');
 
-            // Attach event listener
+            // Attach event listeners
             form.addEventListener('submit', handleSubmit);
+            exportButton.addEventListener('click', handleExport);
+            
+            // Load and display existing data when the page loads
+            loadAndRenderTable();
             
             // Initial render of lucide icons
             lucide.createIcons();
